@@ -1,0 +1,45 @@
+{
+	"name": "pi-custom-system-prompt",
+	"version": "0.1.0",
+	"description": "Pi extension that loads a custom system prompt from `~/.pi/agent/system-prompts/*.md` and injects it on every agent turn, with commands to select, toggle, reload, and switch between replace and append modes.",
+	"type": "module",
+	"license": "MIT",
+	"author": {
+		"name": "Nocte",
+		"email": "nocte19@gmail.com"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/nnocte/pi-custom-system-prompt.git"
+	},
+	"bugs": {
+		"url": "https://github.com/nnocte/pi-custom-system-prompt/issues"
+	},
+	"homepage": "https://github.com/nnocte/pi-custom-system-prompt#readme",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi",
+		"extension",
+		"system-prompt",
+		"custom-prompt",
+		"prompt"
+	],
+	"engines": {
+		"node": ">=18"
+	},
+	"files": [
+		"extensions",
+		"README.md",
+		"LICENSE",
+		"CHANGELOG.md"
+	],
+	"pi": {
+		"extensions": [
+			"./extensions"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	}
+}

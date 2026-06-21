@@ -1,0 +1,4 @@
+# Source control and editor files are handled by .gitignore; .npmignore is
+# for things you want in git but not in the published tarball. Keep this
+# file as a hook for that case. Leaving it empty means the `files` array
+# in package.json is the source of truth.
