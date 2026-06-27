@@ -54,7 +54,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, Skill } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_PROMPT_DIR = path.join(
 	os.homedir(),
@@ -77,6 +77,40 @@ interface PersistedState {
 	enabled: boolean;
 	mode: Mode;
 	selectedFile: string;
+}
+
+function escapeXml(str: string): string {
+	return str
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&apos;");
+}
+
+// Mirror pi's formatSkillsForPrompt exactly so the <available_skills> block the
+// model sees is identical to what pi's own default prompt would emit. Inlined
+// (rather than imported) so the extension takes no runtime dependency on the
+// host package and stays resolvable regardless of node_modules topology.
+function formatSkillsBlock(skills: Skill[]): string {
+	const visible = skills.filter((s) => !s.disableModelInvocation);
+	if (visible.length === 0) return "";
+	const lines = [
+		"\n\nThe following skills provide specialized instructions for specific tasks.",
+		"Use the read tool to load a skill's file when the task matches its description.",
+		"When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.",
+		"",
+		"<available_skills>",
+	];
+	for (const skill of visible) {
+		lines.push("  <skill>");
+		lines.push(`    <name>${escapeXml(skill.name)}</name>`);
+		lines.push(`    <description>${escapeXml(skill.description)}</description>`);
+		lines.push(`    <location>${escapeXml(skill.filePath)}</location>`);
+		lines.push("  </skill>");
+	}
+	lines.push("</available_skills>");
+	return lines.join("\n");
 }
 
 export default function systemPromptExtension(pi: ExtensionAPI) {
@@ -385,6 +419,10 @@ export default function systemPromptExtension(pi: ExtensionAPI) {
 
 		if (mode === "replace") {
 			// Custom prompt is the base. Stack Pi's tools + user customizations after.
+			// Mirror pi's own assembly order (system-prompt.js): append → context →
+			// skills → date → cwd, so we don't silently drop project context files
+			// or the <available_skills> block that tells the model which SKILL.md
+			// files it can read.
 			const now = new Date();
 			const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 			const cwd = opts?.cwd ?? "unknown";
@@ -392,12 +430,30 @@ export default function systemPromptExtension(pi: ExtensionAPI) {
 			const appendSection = appendSystemPrompt
 				? `\n\n${appendSystemPrompt}`
 				: "";
+			const contextFiles = opts?.contextFiles ?? [];
+			const contextSection =
+				contextFiles.length > 0
+					? "\n\n<project_context>\n\nProject-specific instructions and guidelines:\n\n" +
+						contextFiles
+							.map(
+								(f) =>
+									`<project_instructions path="${f.path}">\n${f.content}\n</project_instructions>\n\n`,
+							)
+							.join("") +
+						"</project_context>\n"
+					: "";
+			// Emit the <available_skills> block so the model knows which SKILL.md
+			// files it can read. Skills with disableModelInvocation=true are hidden.
+			const skills: Skill[] = opts?.skills ?? [];
+			const skillsSection = skills.length > 0 ? formatSkillsBlock(skills) : "";
 			return {
 				systemPrompt:
 					promptContent +
 					toolsSection +
 					customSection +
 					appendSection +
+					contextSection +
+					skillsSection +
 					`\nCurrent date: ${dateStr}` +
 					`\nCurrent working directory: ${cwd}`,
 			};

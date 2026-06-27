@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-06-27
+
+### Fixed
+
+- **Replace mode no longer drops project context files.** Previously, switching to `replace` mode reconstructed the system prompt from the custom file but omitted the `<project_context>` block Pi builds from `AGENTS.md`, `.pi/rules`, and other configured context files. The model never saw project-specific instructions in `replace` mode. The replace branch now reads `systemPromptOptions.contextFiles` and emits the same `<project_context>` block Pi's own prompt builder produces, in the same assembly order.
+- **Replace mode no longer drops skills.** The `<available_skills>` block that tells the model which `SKILL.md` files it can read (frontend-design, librarian, context7-docs, pi-subagents, and any custom skills) was also missing in `replace` mode, so the model would not invoke skills even when a task matched one. The replace branch now reads `systemPromptOptions.skills` and emits the block.
+- The available-skills block is produced by an inlined helper (`formatSkillsBlock`) that mirrors Pi's `formatSkillsForPrompt` exactly — same XML escaping, same `disableModelInvocation` filtering — so the extension takes no runtime dependency on the host package and stays resolvable regardless of `node_modules` topology.
+
+### Changed
+
+- Documented the full `replace`-mode assembly order in the README (tools → append → project context → skills → date → cwd).
+
 ## [0.1.0] - 2026-06-21
 
 ### Added
