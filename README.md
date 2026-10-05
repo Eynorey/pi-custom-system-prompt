@@ -23,6 +23,10 @@ Multiple `.md` files can live in the prompt directory; pick which one is active 
 
 The project-context and skills blocks are mirrored from Pi's own prompt assembly, so in `replace` mode the model sees the same project instructions and skill list it would in `append` mode — the custom prompt just becomes the base instead of an add-on.
 
+## Shared prompts
+
+Optional `shared/prepend.md` and `shared/append.md` files are merged before and after the selected prompt in both modes.
+
 ## Setup
 
 ### 1. Install the extension

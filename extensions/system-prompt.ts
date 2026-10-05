@@ -63,6 +63,9 @@ const DEFAULT_PROMPT_DIR = path.join(
 	"system-prompts",
 );
 
+const SHARED_PREPEND_PATH = path.join("shared", "prepend.md");
+const SHARED_APPEND_PATH = path.join("shared", "append.md");
+
 const STATE_PATH = path.join(
 	os.homedir(),
 	".pi",
@@ -77,6 +80,10 @@ interface PersistedState {
 	enabled: boolean;
 	mode: Mode;
 	selectedFile: string;
+}
+
+function joinPromptParts(...parts: Array<string | null>): string {
+	return parts.filter(Boolean).join("\n\n");
 }
 
 function escapeXml(str: string): string {
@@ -121,6 +128,8 @@ export default function systemPromptExtension(pi: ExtensionAPI) {
 	let mode: Mode;
 	let selectedFile: string;
 	let promptContent: string | null = null;
+	let prependPromptContent: string | null = null;
+	let appendPromptContent: string | null = null;
 	let loadError: string | null = null;
 	let lastLoaded: number | null = null;
 
@@ -195,7 +204,23 @@ export default function systemPromptExtension(pi: ExtensionAPI) {
 		}
 	}
 
+	function loadOptionalPrompt(relativePath: string): string | null {
+		try {
+			const filePath = path.join(promptDir, relativePath);
+			const content = fs.readFileSync(filePath, "utf-8");
+			return content.trim() ? content : null;
+		} catch {
+			return null;
+		}
+	}
+
+	function loadSharedPrompts(): void {
+		prependPromptContent = loadOptionalPrompt(SHARED_PREPEND_PATH);
+		appendPromptContent = loadOptionalPrompt(SHARED_APPEND_PATH);
+	}
+
 	function loadPrompt(): void {
+		loadSharedPrompts();
 		ensureSelectedFile();
 
 		if (!selectedFile) {
@@ -265,6 +290,8 @@ export default function systemPromptExtension(pi: ExtensionAPI) {
 				`Enabled:   ${enabled}`,
 				`Status:    ${loadError ?? "loaded"}`,
 				`Size:      ${promptContent?.length ?? 0} chars`,
+				`Shared prepend: ${prependPromptContent ? `${SHARED_PREPEND_PATH} (${prependPromptContent.length} chars)` : "(none)"}`,
+				`Shared append:  ${appendPromptContent ? `${SHARED_APPEND_PATH} (${appendPromptContent.length} chars)` : "(none)"}`,
 				`Loaded:    ${lastLoaded ? new Date(lastLoaded).toLocaleTimeString() : "never"}`,
 				`Available: ${files.length > 0 ? files.join(", ") : "(none)"}`,
 			];
@@ -417,6 +444,12 @@ export default function systemPromptExtension(pi: ExtensionAPI) {
 				toolLines
 			: "";
 
+		const promptBase = joinPromptParts(
+			prependPromptContent,
+			promptContent,
+			appendPromptContent,
+		);
+
 		if (mode === "replace") {
 			// Custom prompt is the base. Stack Pi's tools + user customizations after.
 			// Mirror pi's own assembly order (system-prompt.js): append → context →
@@ -427,7 +460,7 @@ export default function systemPromptExtension(pi: ExtensionAPI) {
 			const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 			const cwd = opts?.cwd ?? "unknown";
 			const customSection = customPrompt ? `\n\n${customPrompt}` : "";
-			const appendSection = appendSystemPrompt
+			const appendSystemPromptSection = appendSystemPrompt
 				? `\n\n${appendSystemPrompt}`
 				: "";
 			const contextFiles = opts?.contextFiles ?? [];
@@ -448,10 +481,10 @@ export default function systemPromptExtension(pi: ExtensionAPI) {
 			const skillsSection = skills.length > 0 ? formatSkillsBlock(skills) : "";
 			return {
 				systemPrompt:
-					promptContent +
+					promptBase +
 					toolsSection +
 					customSection +
-					appendSection +
+					appendSystemPromptSection +
 					contextSection +
 					skillsSection +
 					`\nCurrent date: ${dateStr}` +
@@ -462,11 +495,15 @@ export default function systemPromptExtension(pi: ExtensionAPI) {
 		// Append mode: keep Pi's prompt, add custom prompt as an extra section.
 		// event.systemPrompt already includes appendSystemPrompt, so no need
 		// to re-add it.
+		const customPromptSection =
+			"---\n\n## Custom system prompt\n\n" + promptContent;
 		return {
-			systemPrompt:
-				event.systemPrompt +
-				"\n\n---\n\n## Custom system prompt\n\n" +
-				promptContent,
+			systemPrompt: joinPromptParts(
+				event.systemPrompt,
+				prependPromptContent,
+				customPromptSection,
+				appendPromptContent,
+			),
 		};
 	});
 }
